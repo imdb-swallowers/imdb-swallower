@@ -1,7 +1,8 @@
+use std::collections::HashMap;
 use std::str::FromStr;
 
 use hyper::Uri;
-use scraper::Html;
+use scraper::{ElementRef, Html};
 
 use crate::helpers::helper_tags::ATag;
 use crate::helpers::{
@@ -11,6 +12,27 @@ use crate::ImdbSearchEngine;
 
 use super::By;
 
+#[derive(Debug)]
+pub struct PeopleInfo {
+    name: String,
+    link: String,
+    role: String,
+}
+
+impl PeopleInfo {
+    pub fn name(&self) -> &str {
+        self.name.as_ref()
+    }
+
+    pub fn link(&self) -> &str {
+        self.link.as_ref()
+    }
+
+    pub fn role(&self) -> &str {
+        self.role.as_ref()
+    }
+}
+
 pub struct TitleSearchItem {
     title: ATag,
     image_url: String,
@@ -18,6 +40,7 @@ pub struct TitleSearchItem {
     info: String,
     rating: String,
     summery: String,
+    people_info: Vec<PeopleInfo>,
 }
 
 impl TitleSearchItem {
@@ -43,6 +66,24 @@ impl TitleSearchItem {
 
     pub fn image_url(&self) -> &str {
         self.image_url.as_ref()
+    }
+
+    pub fn people_info(&self) -> &[PeopleInfo] {
+        self.people_info.as_ref()
+    }
+
+    pub fn directors(&self) -> Vec<&PeopleInfo> {
+        self.people_info
+            .iter()
+            .filter(|p| p.role == "Director" || p.role == "Directors")
+            .collect::<Vec<&PeopleInfo>>()
+    }
+
+    pub fn stars(&self) -> Vec<&PeopleInfo> {
+        self.people_info
+            .iter()
+            .filter(|p| p.role == "Star" || p.role == "Stars")
+            .collect::<Vec<&PeopleInfo>>()
     }
 }
 
@@ -77,6 +118,58 @@ pub struct ByTitle {
 impl ByTitle {
     pub fn new(start: u16, count: u8) -> Self {
         Self { start, count }
+    }
+
+    fn parse_people_tag(ele: ElementRef) -> Vec<PeopleInfo> {
+        let mut people_roles = HashMap::new();
+
+        let joined = ele
+            .text()
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
+            .collect::<Vec<String>>();
+
+        let mut current_role = String::new();
+        for item in joined {
+            if item.ends_with(":") {
+                current_role = item.split(":").next().unwrap().to_string();
+                people_roles.insert(current_role.clone(), vec![]);
+            } else {
+                if item == "," || item == "|" {
+                    continue;
+                }
+
+                let val = people_roles.get_mut(&current_role).unwrap();
+                val.push(item)
+            }
+        }
+
+        let mut peoples_link = HashMap::new();
+
+        let a_tags = ele
+            .select_all("a")
+            .iter()
+            .filter_map(|e| e.parse_a_tag())
+            .collect::<Vec<ATag>>();
+
+        for a_tag in a_tags {
+            peoples_link.insert(a_tag.text().to_string(), a_tag.link.to_string());
+        }
+
+        let mut people_info = vec![];
+
+        for (role, names) in people_roles {
+            for name in names {
+                let link = peoples_link.remove(&name).unwrap();
+                people_info.push(PeopleInfo {
+                    name,
+                    link,
+                    role: role.clone(),
+                });
+            }
+        }
+
+        people_info
     }
 }
 
@@ -130,8 +223,7 @@ impl By for ByTitle {
             }
             .to_string();
             let image_url = img_ele.value().attr("src").unwrap().to_string();
-            // let peoples = p_text_muted_eles.next().unwrap();
-            // let votes = p_text_muted_eles.next().unwrap();
+            let peoples = p_text_muted_eles.next().unwrap(); // always exists ...
 
             let info_spans = info_ele
                 .select(&spans_selector)
@@ -147,9 +239,38 @@ impl By for ByTitle {
                 info: info_spans_str,
                 rating,
                 summery: summery_ele.inner_html().trim().to_string(),
+                people_info: ByTitle::parse_people_tag(peoples),
             });
         }
 
         TitleSearch { items }
+    }
+}
+
+#[cfg(test)]
+pub mod test {
+    use scraper::Html;
+
+    use super::ByTitle;
+
+    #[test]
+    fn test_parse_people() {
+        ByTitle::parse_people_tag(
+            Html::parse_fragment(
+                r#"
+            <p class="">
+    Director:
+<a href="/name/nm1918751/?ref_=adv_li_dr_0">Christopher Robin Collins</a>
+                 <span class="ghost">|</span> 
+    Stars:
+<a href="/name/nm5086781/?ref_=adv_li_st_0">Five Star</a>, 
+<a href="/name/nm1711245/?ref_=adv_li_st_1">Delroy Pearson</a>, 
+<a href="/name/nm1269772/?ref_=adv_li_st_2">Denise Pearson</a>, 
+<a href="/name/nm1711246/?ref_=adv_li_st_3">Doris Pearson</a>
+    </p>
+            "#,
+            )
+            .root_element(),
+        );
     }
 }
