@@ -93,20 +93,22 @@ impl TitleSearchItem {
         &self.peoples_info
     }
 
-    pub fn join_peoples<F>(
+    pub fn join_peoples<P, F>(
         &self,
+        parse_group_name: P,
         separator: &str,
         people_to_str: F,
         people_separator: &str,
     ) -> String
     where
+        P: Fn(&String) -> String,
         F: Fn(&PeopleInfo) -> String,
     {
         let mut pre = vec![];
         for group in self.peoples_info.iter() {
             pre.push(format!(
-                "{}: {}",
-                group.0,
+                "{}{}",
+                parse_group_name(group.0),
                 group
                     .1
                     .iter()
