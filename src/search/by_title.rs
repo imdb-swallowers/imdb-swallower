@@ -12,7 +12,7 @@ use crate::ImdbSearchEngine;
 
 use super::By;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PeopleInfo {
     name: String,
     link: String,
@@ -40,7 +40,7 @@ pub struct TitleSearchItem {
     info: String,
     rating: String,
     summery: String,
-    people_info: Vec<PeopleInfo>,
+    peoples_info: HashMap<String, Vec<PeopleInfo>>,
 }
 
 impl TitleSearchItem {
@@ -68,22 +68,29 @@ impl TitleSearchItem {
         self.image_url.as_ref()
     }
 
-    pub fn people_info(&self) -> &[PeopleInfo] {
-        self.people_info.as_ref()
+    pub fn get_by_role(&self, role: &str) -> Vec<PeopleInfo> {
+        self.peoples_info.get(role).unwrap_or(&vec![]).to_vec()
     }
 
-    pub fn directors(&self) -> Vec<&PeopleInfo> {
-        self.people_info
-            .iter()
-            .filter(|p| p.role == "Director" || p.role == "Directors")
-            .collect::<Vec<&PeopleInfo>>()
+    pub fn get_by_roles(&self, roles: Vec<&str>) -> Vec<PeopleInfo> {
+        let mut result = vec![];
+        for role in roles {
+            result.extend(self.get_by_role(role))
+        }
+
+        result
     }
 
-    pub fn stars(&self) -> Vec<&PeopleInfo> {
-        self.people_info
-            .iter()
-            .filter(|p| p.role == "Star" || p.role == "Stars")
-            .collect::<Vec<&PeopleInfo>>()
+    pub fn directors(&self) -> Vec<PeopleInfo> {
+        self.get_by_roles(vec!["Director", "Directors"])
+    }
+
+    pub fn stars(&self) -> Vec<PeopleInfo> {
+        self.get_by_roles(vec!["Star", "Stars"])
+    }
+
+    pub fn peoples_info(&self) -> &HashMap<String, Vec<PeopleInfo>> {
+        &self.peoples_info
     }
 }
 
@@ -120,7 +127,7 @@ impl ByTitle {
         Self { start, count }
     }
 
-    fn parse_people_tag(ele: ElementRef) -> Vec<PeopleInfo> {
+    fn parse_people_tag(ele: ElementRef) -> HashMap<String, Vec<PeopleInfo>> {
         let mut people_roles = HashMap::new();
 
         let joined = ele
@@ -156,17 +163,24 @@ impl ByTitle {
             peoples_link.insert(a_tag.text().to_string(), a_tag.link.to_string());
         }
 
-        let mut people_info = vec![];
+        let mut people_info = HashMap::new();
 
         for (role, names) in people_roles {
+            let mut names_in_role = vec![];
             for name in names {
-                let link = peoples_link.remove(&name).unwrap();
-                people_info.push(PeopleInfo {
-                    name,
-                    link,
-                    role: role.clone(),
-                });
+                match peoples_link.remove(&name) {
+                    Some(link) => {
+                        names_in_role.push(PeopleInfo {
+                            name,
+                            link,
+                            role: role.clone(),
+                        });
+                    }
+                    None => (),
+                };
             }
+
+            people_info.insert(role, names_in_role);
         }
 
         people_info
@@ -239,7 +253,7 @@ impl By for ByTitle {
                 info: info_spans_str,
                 rating,
                 summery: summery_ele.inner_html().trim().to_string(),
-                people_info: ByTitle::parse_people_tag(peoples),
+                peoples_info: ByTitle::parse_people_tag(peoples),
             });
         }
 
