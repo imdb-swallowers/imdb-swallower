@@ -92,6 +92,32 @@ impl TitleSearchItem {
     pub fn peoples_info(&self) -> &HashMap<String, Vec<PeopleInfo>> {
         &self.peoples_info
     }
+
+    pub fn join_peoples<F>(
+        &self,
+        separator: &str,
+        people_to_str: F,
+        people_separator: &str,
+    ) -> String
+    where
+        F: Fn(&PeopleInfo) -> String,
+    {
+        let mut pre = vec![];
+        for group in self.peoples_info.iter() {
+            pre.push(format!(
+                "{}: {}",
+                group.0,
+                group
+                    .1
+                    .iter()
+                    .map(|p| people_to_str(p))
+                    .collect::<Vec<String>>()
+                    .join(people_separator),
+            ));
+        }
+
+        pre.join(separator)
+    }
 }
 
 impl ToString for TitleSearchItem {
