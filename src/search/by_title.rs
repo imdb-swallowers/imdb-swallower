@@ -252,37 +252,41 @@ impl By for ByTitle {
 
         for element in html.select(&item_list_selector) {
             let contents = element.select_first("div.lister-item-content");
-            let img_ele = element.select_first("div.lister-item-image>a>img");
-            let name_ele = contents.select_first("h3.lister-item-header>a");
-            let year_ele = contents.select_first("h3.lister-item-header>span.lister-item-year");
+            if let Some(contents) = contents {
+                let img_ele = element.select_first("div.lister-item-image>a>img").unwrap();
+                let name_ele = contents.select_first("h3.lister-item-header>a").unwrap();
+                let year_ele = contents
+                    .select_first("h3.lister-item-header>span.lister-item-year")
+                    .unwrap();
 
-            let mut p_text_muted_eles = contents.select(&item_content_p_selector);
-            let info_ele = p_text_muted_eles.next().unwrap();
-            let summery_ele = p_text_muted_eles.next().unwrap();
-            let rating = match contents.select(&item_content_rating_bar_selector).next() {
-                Some(ele) => ele.value().attr("data-value").unwrap(),
-                None => "No rating.",
+                let mut p_text_muted_eles = contents.select(&item_content_p_selector);
+                let info_ele = p_text_muted_eles.next().unwrap();
+                let summery_ele = p_text_muted_eles.next().unwrap();
+                let rating = match contents.select(&item_content_rating_bar_selector).next() {
+                    Some(ele) => ele.value().attr("data-value").unwrap(),
+                    None => "No rating.",
+                }
+                .to_string();
+                let image_url = img_ele.value().attr("src").unwrap().to_string();
+                let peoples = p_text_muted_eles.next().unwrap(); // always exists ...
+
+                let info_spans = info_ele
+                    .select(&spans_selector)
+                    .map(|e| e.inner_html().trim().to_string())
+                    .collect::<Vec<String>>();
+
+                let info_spans_str = info_spans.join(" ");
+
+                items.push(TitleSearchItem {
+                    title: name_ele.parse_a_tag().unwrap(),
+                    image_url,
+                    years: year_ele.inner_html(),
+                    info: info_spans_str,
+                    rating,
+                    summery: summery_ele.inner_html().trim().to_string(),
+                    peoples_info: ByTitle::parse_people_tag(peoples),
+                });
             }
-            .to_string();
-            let image_url = img_ele.value().attr("src").unwrap().to_string();
-            let peoples = p_text_muted_eles.next().unwrap(); // always exists ...
-
-            let info_spans = info_ele
-                .select(&spans_selector)
-                .map(|e| e.inner_html().trim().to_string())
-                .collect::<Vec<String>>();
-
-            let info_spans_str = info_spans.join(" ");
-
-            items.push(TitleSearchItem {
-                title: name_ele.parse_a_tag().unwrap(),
-                image_url,
-                years: year_ele.inner_html(),
-                info: info_spans_str,
-                rating,
-                summery: summery_ele.inner_html().trim().to_string(),
-                peoples_info: ByTitle::parse_people_tag(peoples),
-            });
         }
 
         TitleSearch { items }

@@ -5,6 +5,7 @@ use crate::ImdbSearchEngine;
 
 pub mod by;
 pub mod by_title;
+pub mod by_title_find;
 pub mod results;
 
 pub trait By {
