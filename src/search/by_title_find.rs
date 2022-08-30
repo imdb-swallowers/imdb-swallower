@@ -23,7 +23,7 @@ pub struct ByTitleFoundItem {
 }
 
 impl ByTitleFoundItem {
-    fn get_title_id(&self) -> String {
+    pub fn get_title_id(&self) -> String {
         self.link.split("/").nth(2).unwrap().to_string()
     }
 
